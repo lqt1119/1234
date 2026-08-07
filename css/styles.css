@@ -534,6 +534,7 @@
             max-width: 100vw;
             overflow-x: hidden !important;
             overscroll-behavior-x: none;
+            overflow-y: hidden;
             margin: 0;
             padding: 0;
         }
@@ -544,6 +545,7 @@
             color: var(--text-primary);
             transition: background-color 0.5s ease, color 0.5s ease;
             height: 100vh;
+            height: 100dvh;
             display: flex;
             flex-direction: column;
             overflow: hidden; 
@@ -5943,6 +5945,33 @@
     .empty-state p {
         font-size: 14px;
     }
+        }
+
+        /* ---- 荣耀/手机 精细化适配 ---- */
+        html, body {
+            -webkit-tap-highlight-color: transparent;
+        }
+        .header {
+            padding-top: env(safe-area-inset-top, 0px);
+        }
+        .header-inner {
+            padding-top: max(4px, env(safe-area-inset-top, 0px));
+        }
+        .main-chat-area {
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+        }
+        #immersive-exit-btn {
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 100px);
+        }
+        @media (max-width: 480px) {
+            .input-area {
+                padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+            }
+            .input-area .input-btn,
+            .input-buttons .input-btn,
+            .send-btn {
+                touch-action: manipulation;
+            }
         }
 
         @media (min-width: 481px) and (max-width: 1024px) {

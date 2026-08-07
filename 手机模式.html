@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>聊天 · 手机模式</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body { height: 100%; }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 30% 20%, #3a3f63, #101325 72%);
+    font-family: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+    overflow: hidden;
+  }
+
+  /* 桌面壁纸装饰 */
+  .desk {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background:
+      radial-gradient(circle at 20% 15%, rgba(120,150,255,.25), transparent 45%),
+      radial-gradient(circle at 80% 85%, rgba(255,120,180,.18), transparent 45%),
+      linear-gradient(160deg, #232848, #12152a);
+  }
+
+  /* 手机壳缩放容器 */
+  .phone-wrap {
+    width: 390px; height: 844px;
+    transform: scale(1);
+    transform-origin: center center;
+    flex: 0 0 auto;
+  }
+
+  /* 手机机身 */
+  .phone {
+    width: 100%; height: 100%;
+    background: #000;
+    border-radius: 56px;
+    padding: 12px;
+    position: relative;
+    box-shadow:
+      0 40px 90px rgba(0,0,0,.65),
+      0 0 0 2px rgba(255,255,255,.06),
+      inset 0 0 0 2px #1c1e2c;
+  }
+  /* 侧边按键 */
+  .phone::before {
+    content: ''; position: absolute; right: -3px; top: 170px;
+    width: 4px; height: 70px; background: #3a3d55; border-radius: 3px;
+  }
+  .phone::after {
+    content: ''; position: absolute; right: -3px; top: 260px;
+    width: 4px; height: 110px; background: #3a3d55; border-radius: 3px;
+  }
+
+  /* 屏幕 */
+  .screen {
+    width: 100%; height: 100%;
+    background: #0d0f1c;
+    border-radius: 44px;
+    overflow: hidden;
+    position: relative;
+  }
+  .screen iframe {
+    width: 100%; height: 100%;
+    border: none;
+    display: block;
+    background: #fff;
+  }
+
+  /* 灵动岛 */
+  .notch {
+    position: absolute; top: 12px; left: 50%;
+    transform: translateX(-50%);
+    width: 112px; height: 28px;
+    background: #000;
+    border-radius: 16px;
+    z-index: 9999999;
+    pointer-events: none;
+  }
+
+  /* 底部 home 条 */
+  .home-indicator {
+    position: absolute; bottom: 10px; left: 50%;
+    transform: translateX(-50%);
+    width: 132px; height: 5px;
+    background: rgba(255,255,255,.85);
+    border-radius: 3px;
+    z-index: 9999999;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+  <div class="desk">
+    <div class="phone-wrap" id="phoneWrap">
+      <div class="phone">
+        <div class="screen">
+          <iframe id="appFrame" src="index.html" allow="camera;microphone"></iframe>
+        </div>
+        <div class="notch"></div>
+        <div class="home-indicator"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // 自动缩放手机壳，适配任意电脑窗口尺寸
+  function fit() {
+    var w = window.innerWidth, h = window.innerHeight;
+    var wrap = document.getElementById('phoneWrap');
+    var scale = Math.min(w / 430, h / 900);
+    scale = Math.max(0.4, Math.min(1, scale));
+    wrap.style.transform = 'scale(' + scale + ')';
+  }
+  window.addEventListener('resize', fit);
+  fit();
+</script>
+</body>
+</html>
