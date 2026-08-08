@@ -1666,6 +1666,7 @@ const addMessage = (message) => {
 if (!isBatchMode && type === 'normal') {
     // 触发延迟回复（真实用户消息 → isUserMessage = true）
     window._triggerDelayedReply(true);
+    if (typeof window._onUserHungry === 'function') window._onUserHungry(text);
 }
 };
 
@@ -1917,9 +1918,10 @@ if (partnerPersonas && partnerPersonas.length > 0 && Math.random() < 0.3) {
             const puzOn = (typeof window.puzzleCardEnabled === 'function') && window.puzzleCardEnabled();
             let composedOnce = null;
             if (puzOn && typeof window.composeGiftNote === 'function') {
-                composedOnce = window.composeGiftNote() || null; // 可能不拼 → 回落默认
+                composedOnce = window.composeGiftNote() || null; // 仅用于空库兼容判断，不影响分段
             }
-            const replyCount = composedOnce ? 1 : (Math.random() < 0.75 ? 1: (Math.random() < 0.95 ? 2: 3));
+            // 分段逻辑与拼字卡解耦：开启拼字卡后依旧可分段回复（1/2/3 条）
+            const replyCount = (Math.random() < 0.75 ? 1 : (Math.random() < 0.95 ? 2 : 3));
             if (!customReplies || customReplies.length === 0) {
                 if (composedOnce) {
                     // 拼字卡且有内容即可直接回复，无需校验主字卡库
@@ -1962,9 +1964,14 @@ if (partnerPersonas && partnerPersonas.length > 0 && Math.random() < 0.3) {
 const replyPool = replyPoolOnce;
                     // 被屏蔽或无效项直接换下一个，尽量保证每次都产出可用回复
                     let replyText = '';
-                    if (composedOnce) {
-                        replyText = composedOnce; // 拼字卡组合直接作为本次回复
-                    } else {
+                    // 拼字卡：每条消息独立随机，拼（组合多卡）/ 单独一张 / 不拼 都有可能
+                    if (puzOn && typeof window.composeGiftNote === 'function') {
+                        const composed = window.composeGiftNote();
+                        if (composed) {
+                            replyText = composed; // 拼到了：可能单个词，也可能是组合句子
+                        }
+                    }
+                    if (!replyText) {
                         for (let t = 0; t < 6; t++) {
                             const picked = replyPool[Math.floor(Math.random() * replyPool.length)];
                             if (picked && String(picked).trim()) {

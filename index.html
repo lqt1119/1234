@@ -2,7 +2,7 @@
 <html lang="zh-CN" data-theme="light" data-color-theme="black-white">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
     <meta name="format-detection" content="telephone=no, email=no">
     <meta name="screen-orientation" content="portrait">
     <meta name="x5-orientation" content="portrait">
@@ -1471,7 +1471,7 @@
                         </div>
                         <div class="cs-slider-row">
                             <span class="cs-slider-label">最长等待</span>
-                            <input type="range" min="1000" max="120000" step="1000" value="7000" class="font-size-slider" id="reply-delay-max-slider">
+                            <input type="range" min="1000" max="300000" step="1000" value="7000" class="font-size-slider" id="reply-delay-max-slider">
                             <span class="cs-slider-val" id="reply-delay-max-value">7s</span>
                         </div>
                     </div>
@@ -2894,6 +2894,7 @@
         })();
     </script>
     <script src="js/app.js"></script>
+    <script src="js/keyboard-adapt.js"></script>
     <script src="js/redpacket.js"></script>
 </body>
 </html>

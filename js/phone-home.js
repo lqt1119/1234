@@ -21,6 +21,7 @@
   var LS_KEY_BG = 'ph_bg';
   var LS_KEY_SHOP = 'ph_shop';
   var LS_KEY_FOOD = 'ph_food';
+  var LS_KEY_SCHED = 'ph_schedules';
 
   /* 商城商品清单（共 30 个常规商品） */
   var SHOP_ITEMS = [
@@ -227,10 +228,13 @@
     cycle: { lastStart: '', length: 28, duration: 5 },
     shop: { got: [], given: [], cart: [], wishes: [] },
     food: { got: [], given: [], cart: [] },
+    schedules: {},
     year: new Date().getFullYear(),
     month: new Date().getMonth()
   };
   var root = null;
+  var slotTick = null;
+  var momPending = [];
 
   /* ---------- 工具 ---------- */
   function pad(n) { return String(n).padStart(2, '0'); }
@@ -320,12 +324,14 @@
     S.cycle = Object.assign({ lastStart: '', length: 28, duration: 5 }, lsGet(LS_KEY_CYCLE, {}));
     S.shop = Object.assign({ got: [], given: [], cart: [], wishes: [] }, lsGet(LS_KEY_SHOP, {}));
     S.food = Object.assign({ got: [], given: [], cart: [] }, lsGet(LS_KEY_FOOD, {}));
+    S.schedules = lsGet(LS_KEY_SCHED, {}) || {};
   }
   function saveAnniv() { lsSet(LS_KEY_ANN, S.anniversaries); }
   function savePeriods() { lsSet(LS_KEY_PERIOD, Array.from(S.periods)); }
   function saveCycle() { lsSet(LS_KEY_CYCLE, S.cycle); }
   function saveShop() { lsSet(LS_KEY_SHOP, S.shop); }
   function saveFood() { lsSet(LS_KEY_FOOD, S.food); }
+  function saveSched() { lsSet(LS_KEY_SCHED, S.schedules); }
 
   /* 智能经期预测：依据最近一次经期起始日 + 周期长度推算后续周期（预测范围：当前渲染月份的前后各 3 个周期，避免无限循环） */
   function predictPeriodDays(year, month) {
@@ -373,9 +379,10 @@
     '#phone-home .cd-content{position:relative;z-index:2;flex:1;display:flex;flex-direction:column;}' +
     '#phone-home .cd-list{flex:1;overflow:auto;margin-bottom:8px;}' +
     '#phone-home .cd-empty{color:#5a7ba8;font-size:12px;padding:6px 2px;}' +
-    '#phone-home .cd-item{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:4px 2px;border-bottom:1px dashed rgba(59,130,246,.25);cursor:pointer;}' +
+    '#phone-home .cd-item{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:4px 8px;margin:2px 0;border-radius:8px;border:1px solid rgba(59,130,246,.18);background:rgba(255,255,255,.55);box-shadow:0 1px 4px rgba(59,130,246,.12);cursor:pointer;}' +
+    '#phone-home .cd-item:hover{background:rgba(255,255,255,.85);}' +
     '#phone-home .cd-item .n{color:#16325c;max-width:74px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}' +
-    '#phone-home .cd-item .d{color:#ff9d2e;font-weight:600;white-space:nowrap;}' +
+    '#phone-home .cd-item .d{color:#000;font-weight:600;white-space:nowrap;text-shadow:0 1px 2px rgba(255,255,255,.8);}' +
     '#phone-home .cd-tools{display:flex;gap:6px;margin-top:auto;}' +
     '#phone-home .ph-btn{border:none;border-radius:20px;padding:6px 10px;font-size:12px;cursor:pointer;background:#e6efff;color:#1d4ed8;transition:.2s;font-family:inherit;}' +
     '#phone-home .ph-btn:hover{background:#d7e6ff;}' +
@@ -392,6 +399,7 @@
     '#phone-home .cal-cell .dot{display:inline-flex;gap:2px;margin-top:1px;min-height:4px;}' +
     '#phone-home .cal-cell .dot span{width:3px;height:3px;border-radius:50%;}' +
     '#phone-home .cal-cell.ann .dot span{background:#ffb857;}' +
+    '#phone-home .cal-cell.sched .dot span{background:#22c55e;}' +
     '#phone-home .cal-cell.period .dot span{background:#ff5b7a;box-shadow:0 0 4px rgba(255,91,122,.7);}' +
     '#phone-home .cal-cell.pred{background:rgba(255,91,122,.12);}' +
     '#phone-home .cal-cell.pred .dot span{background:#ff5b7a;opacity:.5;}' +
@@ -546,10 +554,13 @@
     '#phone-home .mom-time{font-size:11px;color:#b2b2b2;margin-top:6px;display:flex;align-items:center;gap:10px;}' +
     '#phone-home .mom-actions{font-size:12px;color:#576b95;cursor:pointer;}' +
     '#phone-home .mom-cmts{margin-top:8px;background:#f4f4f4;border-radius:6px;padding:6px 8px;font-size:12px;line-height:1.7;}' +
-    '#phone-home .mom-cmt{color:#1a1a1a;word-break:break-word;}' +
+    '#phone-home .mom-cmt{border-bottom:none;color:#1a1a1a;word-break:break-word;}' +
     '#phone-home .mom-cmt b{color:#576b95;font-weight:700;}' +
     '#phone-home .mom-cmt .reply{margin-left:2px;}' +
     '#phone-home .mom-cmt .to{color:#576b95;font-weight:700;margin:0 2px;}' +
+    '#phone-home .mom-likes{margin-top:8px;background:#f4f4f4;border-radius:6px;padding:4px 8px;font-size:12px;line-height:1.7;}' +
+    '#phone-home .mom-likes .like-icon{color:#e74c3c;font-size:12px;}' +
+    '#phone-home .mom-likes b{color:#576b95;font-weight:700;font-weight:bold;color:#3a7bd5;}' +
     '#phone-home .mom-pub{position:absolute;right:16px;bottom:26px;z-index:2;background:#111;color:#fff;border:none;width:52px;height:52px;border-radius:50%;font-size:24px;font-weight:300;line-height:1;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.35);font-family:inherit;display:flex;align-items:center;justify-content:center;}' +
     /* 规格选择弹层 */
     '#phone-home .sp-group{margin-bottom:12px;}' +
@@ -602,6 +613,7 @@
     '    <div class="cal-hint">' +
     '      <span><i style="background:#ffd66b"></i>纪念日</span>' +
     '      <span><i style="background:#ff5b7a"></i>生理期</span>' +
+    '      <span><i style="background:#22c55e"></i>日程</span>' +
     '      <span><i style="background:#5b8bff"></i>今天</span>' +
     '      <span class="ii" id="ph-cycleSet" style="color:#8b94bf;">✨ 预测设置</span>' +
     '    </div>' +
@@ -712,8 +724,9 @@
       var isPeriod = S.periods.has(s);
       var isPred = predSet.has(s) && !isPeriod;
       var isAnn = isAnnivOn(c.d);
-      var cls = 'cal-cell' + (c.o ? ' other' : '') + (isToday ? ' today' : '') + (isAnn ? ' ann' : '') + (isPeriod ? ' period' : '') + (isPred ? ' pred' : '');
-      var dots = (isAnn ? '<span></span>' : '') + (isPeriod || isPred ? '<span></span>' : '');
+      var hasSched = !!( (S.schedules && S.schedules[s]) && (S.schedules[s].length) );
+      var cls = 'cal-cell' + (c.o ? ' other' : '') + (isToday ? ' today' : '') + (isAnn ? ' ann' : '') + (isPeriod ? ' period' : '') + (isPred ? ' pred' : '') + (hasSched ? ' sched' : '');
+      var dots = (isAnn ? '<span></span>' : '') + (isPeriod || isPred ? '<span></span>' : '') + (hasSched ? '<span style="display:inline-block;"></span>' : '');
       return '<div class="' + cls + '" data-date="' + s + '">' + c.d.getDate() + '<span class="dot">' + dots + '</span></div>';
     }).join('');
 
@@ -724,23 +737,107 @@
 
   function onDayClick(dateStr) {
     var isPeriod = S.periods.has(dateStr);
-    var isPred = !isPeriod && predictPeriodDays(S.year, S.month).has(dateStr);
-    if (isPeriod) {
-      if (!confirm('取消该天的生理期标记吗？')) return;
-      S.periods.delete(dateStr);
-      savePeriods(); renderCalendar();
-      toast('已取消生理期');
-    } else if (isPred) {
-      if (!confirm('该天为预测经期，确认标记为实际生理期吗？')) return;
-      S.periods.add(dateStr);
-      savePeriods(); renderCalendar();
-      toast('已标记实际生理期');
-    } else {
-      if (!confirm('将该天标记为生理期（经期）吗？')) return;
-      S.periods.add(dateStr);
-      savePeriods(); renderCalendar();
-      toast('已标记生理期');
+    var predSet = predictPeriodDays(S.year, S.month);
+    var isPred = !isPeriod && predSet.has(dateStr);
+    var annDay = parseYMD(dateStr);
+    var isAnn = S.anniversaries.filter(function (a) {
+      if (a.repeat === 'none') {
+        var f = parseYMD(a.date);
+        return f.getMonth() === annDay.getMonth() && f.getDate() === annDay.getDate() && ymd(f) === ymd(annDay);
+      }
+      if (a.repeat === 'year') {
+        var b = parseYMD(a.date);
+        return b.getMonth() === annDay.getMonth() && b.getDate() === annDay.getDate();
+      }
+      if (a.repeat === 'month') {
+        return parseYMD(a.date).getDate() === annDay.getDate();
+      }
+      if (a.repeat === 'week') {
+        return parseYMD(a.date).getDay() === annDay.getDay();
+      }
+      return false;
+    });
+    var daySched = (S.schedules && (S.schedules[dateStr] || [])) || [];
+    var d = parseYMD(dateStr);
+    var title = (d.getMonth() + 1) + '月' + d.getDate() + '日 · ' + WEEK_CN[d.getDay()] +
+      (ymd(new Date()) === dateStr ? '（今天）' : '');
+
+    function renderBody() {
+      var periodRow =
+        '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 2px;">' +
+        '<span style="font-size:13px;color:#16325c;">经期</span>' +
+        (isPeriod
+          ? '<button class="ph-mini danger" data-act="period-on">生理期（可点击取消）</button>'
+          : (isPred
+            ? '<button class="ph-mini" data-act="period-pred">预测经期（点击标记为实际）</button>'
+            : '<button class="ph-mini" data-act="period-off">未标记（点击标记）</button>')) +
+        '</div>';
+
+      var annHtml = isAnn.length
+        ? isAnn.map(function (a) { return '<div class="ph-li"><span class="name">🌸 ' + esc(a.name || '纪念日') + '</span><span class="sub">' + esc(a.date) + '</span></div>'; }).join('')
+        : '<div style="font-size:12px;color:#8b94bf;padding:4px 2px;">当天没有纪念日</div>';
+
+      var schedList = daySched.length
+        ? daySched.map(function (t, idx) {
+            return '<div class="ph-li"><span class="name">📌 ' + esc(t) + '</span>' +
+              '<span class="act"><button class="ph-mini danger" data-act="del-sched" data-idx="' + idx + '">删除</button></span></div>';
+          }).join('')
+        : '<div style="font-size:12px;color:#8b94bf;padding:4px 2px;">当天暂无日程</div>';
+
+      return '<h3>『' + title + '』</h3>' +
+        '<div style="color:#4a6fa5;font-size:11px;margin-bottom:8px;">点击可查看 / 标记当天状态</div>' +
+        periodRow +
+        '<div style="border-top:1px solid rgba(59,130,246,.15);margin:8px 0;"></div>' +
+        '<div style="font-size:12px;color:#16325c;font-weight:700;margin-bottom:6px;">🌸 纪念日</div>' + annHtml +
+        '<div style="border-top:1px solid rgba(59,130,246,.15);margin:8px 0;"></div>' +
+        '<div style="font-size:12px;color:#16325c;font-weight:700;margin-bottom:6px;">📌 日程安排</div>' +
+        '<div style="max-height:120px;overflow:auto;">' + schedList + '</div>' +
+        '<div style="display:flex;gap:6px;margin-top:8px;">' +
+        '<input id="phSchedInput" placeholder="添加日程，如：晚上一起视频" style="flex:1;border:1px solid rgba(59,130,246,.3);border-radius:8px;padding:8px 10px;font-size:13px;color:#16325c;font-family:inherit;" />' +
+        '<button class="ph-btn primary" data-act="add-sched">＋</button>' +
+        '</div>' +
+        '<div class="ph-btns" style="margin-top:12px;">' +
+        '<button class="ph-btn" data-act="close">关闭</button>' +
+        '</div>';
     }
+
+    var ov = openModal(renderBody());
+    ov.addEventListener('click', function (e) {
+      if (e.target === ov) { ov.remove(); return; }
+      var actEl = e.target.closest('[data-act]');
+      if (!actEl) return;
+      var act = actEl.dataset.act;
+      if (act === 'close') { ov.remove(); return; }
+      if (act === 'period-on') {
+        S.periods.delete(dateStr); savePeriods();
+        isPeriod = false; isPred = false; renderCalendar();
+        ov.firstElementChild.innerHTML = renderBody(); toast('已取消当天生理期标记');
+      } else if (act === 'period-pred') {
+        S.periods.add(dateStr); savePeriods();
+        isPeriod = true; isPred = false; renderCalendar();
+        ov.firstElementChild.innerHTML = renderBody(); toast('已标记为实际生理期');
+      } else if (act === 'period-off') {
+        S.periods.add(dateStr); savePeriods();
+        isPeriod = true; isPred = false; renderCalendar();
+        ov.firstElementChild.innerHTML = renderBody(); toast('已标记生理期');
+      } else if (act === 'add-sched') {
+        var input = ov.querySelector('#phSchedInput');
+        var txt = (input && input.value || '').trim();
+        if (!txt) { toast('请先输入日程内容'); return; }
+        daySched.push(txt);
+        S.schedules[dateStr] = daySched;
+        saveSched(); renderCalendar();
+        ov.firstElementChild.innerHTML = renderBody();
+        toast('已添加日程 📌');
+      } else if (act === 'del-sched') {
+        var idx = parseInt(actEl.dataset.idx, 10);
+        daySched.splice(idx, 1);
+        if (daySched.length) S.schedules[dateStr] = daySched; else delete S.schedules[dateStr];
+        saveSched(); renderCalendar();
+        ov.firstElementChild.innerHTML = renderBody();
+        toast('已删除该日程');
+      }
+    });
   }
 
   /* ---------- 弹层工具 ---------- */
@@ -1595,31 +1692,101 @@
     } catch (e) {}
   }
 
-  /* 对方偶尔主动帮我点外卖 */
+  /* ---------- 对方主动帮我点外卖：按时间窗口 + 每日各渠道限次 ---------- */
+  // 渠道：饭点（8/12/18点前后2小时）每天≤2次、非饭点每天≤2次、聊天喊饿每天≤2次
+  var LS_KEY_FOOD_DAILY = 'ph_food_daily';
+  var KEY_FOOD_GIFT_NEXT = 'ph_food_gift_next';
+
+  function foodDailyKey(ts) {
+    var d = new Date(ts || Date.now());
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  }
+  function foodDaily(ts) {
+    var st = lsGet(LS_KEY_FOOD_DAILY, {});
+    var day = foodDailyKey(ts);
+    if (st.day !== day) st = { day: day, meal: 0, snack: 0, chat: 0 };
+    return st;
+  }
+  // 当前饭点窗口的结束时间戳（6-10 / 10-14 / 16-20）；不在饭点窗口返回 null
+  function mealWindowEnd(ts) {
+    var d = new Date(ts), h = d.getHours(), endH = null;
+    if (h >= 6 && h < 10) endH = 10;
+    else if (h >= 10 && h < 14) endH = 14;
+    else if (h >= 16 && h < 20) endH = 20;
+    if (!endH) return null;
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), endH, 0, 0, 0).getTime();
+  }
+  // 生成一份随机外卖并记录到 got（附带渠道 tag 与每日计数）
+  function sendPartnerFood(channel) {
+    try {
+      var now = Date.now();
+      var f = FOOD_ITEMS[Math.floor(Math.random() * FOOD_ITEMS.length)];
+      var picks = f.opts.map(function (o) { return { k: o.k, v: o.v[Math.floor(Math.random() * o.v.length)] }; });
+      var gift = { id: f.id, name: f.name, icon: f.icon, price: f.price, spec: picks, who: 'partner', ts: now };
+      gift.kindText = channel === 'meal' ? '饭点外卖' : '外卖';
+      gift.note = giftNoteForPartner();
+      walletPayTheirs(f.price); // 扣 TA 的余额
+      (S.food.got = S.food.got || []).push(gift);
+      saveFood();
+      var st = foodDaily(now);
+      st[channel === 'meal' ? 'meal' : (channel === 'snack' ? 'snack' : 'chat')]++;
+      lsSet(LS_KEY_FOOD_DAILY, st);
+      toast('💌 ' + getPartnerName() + ' 给你点了' + gift.kindText + '：' + f.name);
+      notifyFoodGift(gift, 'receive');
+    } catch (e) {}
+  }
+
   function maybePartnerFoodGift() {
     try {
       if (!S.food) return;
-      var key = 'ph_food_gift_ts';
       var now = Date.now();
-      var next = parseInt(lsGet(key, 0), 10) || 0;
+      var h = new Date(now).getHours();
+      var isMeal = mealWindowEnd(now) !== null; // 8/12/18 点前后2小时
+      var next = parseInt(lsGet(KEY_FOOD_GIFT_NEXT, 0), 10) || 0;
       if (now < next) return;
-      var cooldown = 1000 * 60 * 60 * (6 + Math.floor(Math.random() * 18)); // 6~24h
-      if (Math.random() < 0.3) {
-        var f = FOOD_ITEMS[Math.floor(Math.random() * FOOD_ITEMS.length)];
-        var picks = f.opts.map(function (o) { return { k: o.k, v: o.v[Math.floor(Math.random() * o.v.length)] }; });
-        var gift = { id: f.id, name: f.name, icon: f.icon, price: f.price, spec: picks, who: 'partner', ts: now };
-        gift.note = giftNoteForPartner();
-        walletPayTheirs(f.price); // 扣 TA 的余额
-        (S.food.got = S.food.got || []).push(gift);
-        saveFood();
-        lsSet(key, now + cooldown);
-        toast('💝 ' + getPartnerName() + ' 给你点了外卖：' + f.name);
-        notifyFoodGift(gift, 'receive');
+      var st = foodDaily(now);
+      if (isMeal) {
+        if (st.meal >= 2) { lsSet(KEY_FOOD_GIFT_NEXT, now + 1000 * 60 * 60); return; } // 满额，下个窗口再看
+        if (Math.random() < 0.8) {
+          sendPartnerFood('meal');
+        }
+        lsSet(KEY_FOOD_GIFT_NEXT, mealWindowEnd(now) + 2000); // 每次只在当前饭点窗口判断一次
       } else {
-        lsSet(key, now + cooldown * 2);
+        if (st.snack >= 2) { lsSet(KEY_FOOD_GIFT_NEXT, now + 1000 * 60 * 60); return; }
+        if (Math.random() < 0.2) {
+          sendPartnerFood('snack');
+          lsSet(KEY_FOOD_GIFT_NEXT, now + (40 + Math.random() * 120) * 60000); // 40~160 分钟后再判
+        } else {
+          lsSet(KEY_FOOD_GIFT_NEXT, now + (30 + Math.random() * 90) * 60000); // 0.5~2 小时后再判
+        }
       }
     } catch (e) {}
   }
+  // 聊天触发：我说“好饿/饿死了/没吃饭/没吃”等 → 20% 对方点外卖，每天≤2次
+  function maybeHungryFoodGift(text) {
+    try {
+      if (!S.food) return;
+      var t = (text || '').trim();
+      if (!/(好饿|饿死了|还没吃饭|还没吃|没吃饭|没吃)/.test(t)) return;
+      var st = foodDaily(Date.now());
+      if (st.chat >= 2) return;
+      if (Math.random() < 0.2) sendPartnerFood('chat');
+    } catch (e) {}
+  }
+  window._onUserHungry = function (t) { maybeHungryFoodGift(t); };
+  window.phoneHomeDebug = {
+    isMealWindow: function (ts) { return mealWindowEnd(ts || Date.now()) !== null; },
+    windowMatrix: function () {
+      var out = [];
+      [7.5, 8, 9, 12, 13, 18, 19, 3, 20.5, 21].forEach(function (hh) {
+        var h = Math.floor(hh); var m = Math.round((hh - h) * 60);
+        out.push(h + ':' + (m < 10 ? '0' : '') + m + '=' + (mealWindowEnd(new Date(2026, 7, 8, h, m, 0).getTime()) !== null));
+      });
+      return out.join(',');
+    },
+    daily: function () { return foodDaily(Date.now()); },
+    hungryMatch: function (t) { return /(好饿|饿死|还没吃|没吃饭|没吃)/.test((t || '').trim()); }
+  };
 
   /* ---------- 外卖许愿：自定义商品上架到商城 ---------- */
   var FOOD_WISH_EMOJIS = ['🧋','🧋','🍵','🧊','🍔','🍟','🍗','🍤','🍢','🍜','🍛','🍚','🍲','🍣','🍱','🥟','🦞','🍕','🥗','🌭','🥤','🍦','🌸','🧸','📿','💍','🌹','☁️','⚡'];
@@ -1783,30 +1950,47 @@
     var t = cardText();
     return t || GIFT_REPLY_POOL[Math.floor(Math.random() * GIFT_REPLY_POOL.length)];
   }
-  // 我送他并留言时：安排他在礼物送出后 5 分钟内，在"我送出的"页回复留言。
-  // 每次随机回复 1~5 条，每条都从主字卡调取（受拼字卡开关影响）。
+  // 我送他并留言时：送出后 5 分钟内，在"我送出的"页回复留言。
+  // 每次随机回复 1~5 条，每条都从主字卡取（受拼字卡开关影响）；字卡取不到时兜底用默认文案，保证一定回复。
   function schedulePartnerReply(record) {
     try {
-      // 在 0~5 分钟内随机任意时刻回复（含立即），最大不超过 5 分钟
-      var waitMs = Math.random() * 5 * 60 * 1000;
-      setTimeout(function () {
-        try {
+      record.replyPending = true;                    // 持久化"待回复"标记，刷新/重启后仍会补发
+      record.replyEta = Date.now() + Math.random() * 5 * 60 * 1000; // 0~5 分钟内随机时刻回复
+      saveShop(); saveFood();
+      if (typeof window.phoneHome === 'object' && window.phoneHome.flushRecords) window.phoneHome.flushRecords();
+    } catch (e) {}
+  }
+  // 全局 tick：扫描所有"待回复"的礼物/外卖记录，到期后写入回复并持久化
+  function tickPartnerReplies(now) {
+    try {
+      var changed = false;
+      function scan(list) {
+        (list || []).forEach(function (g) {
+          if (!g || g.reply) return;
+          if (!g.note) return;
+          if (typeof g.replyEta === 'number' && now < g.replyEta) return;
           var n = 1 + Math.floor(Math.random() * 5); // 1~5 条
           var replies = [];
           for (var i = 0; i < n; i++) {
             var t = cardText();
-            if (t) replies.push(t);
+            replies.push(t || GIFT_REPLY_POOL[Math.floor(Math.random() * GIFT_REPLY_POOL.length)]);
           }
-          if (replies.length) {
-            record.reply = replies; // 数组
-            record.replyAt = Date.now();
-            record.replyPending = false;
-            if (typeof window.phoneHome === 'object' && window.phoneHome.flushRecords) window.phoneHome.flushRecords();
-          }
-        } catch (e) {}
-      }, waitMs);
+          g.reply = replies;       // 数组
+          g.replyAt = now;
+          g.replyPending = false;
+          changed = true;
+        });
+      }
+      scan(S.shop && S.shop.given);
+      scan(S.food && S.food.given);
+      if (changed) {
+        saveShop(); saveFood();
+        if (typeof window.phoneHome === 'object' && window.phoneHome.flushRecords) window.phoneHome.flushRecords();
+      }
     } catch (e) {}
   }
+  // save 保存级别 shop + food + moments（memory 持久化到 localStorage）
+  function save() { saveShop(); saveFood(); }
 
   /* ---------- 朋友圈 ---------- */
   var LS_KEY_MOM = 'ph_moments';
@@ -1818,8 +2002,9 @@
     return {
       bg: d.bg || '',
       signature: d.signature || '记录美好生活',
-      replyMin: Math.max(0, Math.min(10, parseInt(d.replyMin, 10) || 0)),   // 他回复我朋友圈速度 0~10 分钟
-      postMin: Math.max(0, Math.min(1440, parseInt(d.postMin, 10) || 0))    // 他发布朋友圈速度 0~1440 分钟
+      replyMin: Math.max(0, Math.min(10, parseInt(d.replyMin, 10) || 5)),   // 他回复我 0~10 分钟（默认 5）
+      postMin: Math.max(0, Math.min(1440, parseInt(d.postMin, 10) || 0)),    // 他发布朋友圈速度 0~1440 分钟
+      likers: Array.isArray(d.likers) ? d.likers : []   // 额外会点赞的人（每人 50% 概率）
     };
   }
   function saveMomSettings(s) { lsSet(LS_KEY_MOM_SET, s); }
@@ -1928,6 +2113,13 @@
       var avSrc = mine ? getMyAvatarMom() : getPartnerAvatarMom();
       var sig = getMomSettings().signature;
       var sigHtml = (mine && sig) ? '<div style="font-size:12px;color:#999;margin-top:2px;">' + esc(sig) + '</div>' : '';
+      var likes = Array.isArray(p.likes) ? p.likes : [];
+      if (!likes.length && p.liked) likes = [getMyNameMom()]; // 兼容旧数据
+      var likeHtml = '';
+      if (likes.length) {
+        var likeStr = likes.map(function (n) { return '<b data-act="like-badge">' + esc(n) + '</b>'; }).join('、');
+        likeHtml = '<div class="mom-likes"><span class="like-icon">❤️</span> ' + likeStr + '</div>';
+      }
       var cmtHtml = '';
       var cmts = (p.comments || []).filter(function (c) { return c && c.text; });
       if (cmts.length) {
@@ -1952,8 +2144,8 @@
         (p.img ? '<img class="mom-img" src="' + esc(p.img) + '" />' : '') +
         '<div class="mom-time">' + fmtDate(p.ts) +
         '<span class="mom-actions" data-act="comment" data-post="' + p.id + '">💬 评论</span>' +
-        '<span class="mom-actions" data-act="like" data-post="' + p.id + '">' + (p.liked ? '❤️' : '🤍') + '</span>' +
-        '</div>' + cmtHtml +
+        '<span class="mom-actions" data-act="like" data-post="' + p.id + '">' + (likes.indexOf(getMyNameMom()) !== -1 ? '❤️' : '🤍') + '</span>' +
+        '</div>' + likeHtml + cmtHtml +
         '</div>' +
         '</div>';
     }).join('');
@@ -1974,12 +2166,73 @@
 
   function toggleMomLike(postId) {
     var d = getMomData();
+    var myName = getMyNameMom();
     ['posts', 'myPosts'].forEach(function (k) {
       (d[k] || []).forEach(function (p) {
-        if (String(p.id) === String(postId)) p.liked = !p.liked;
+        if (String(p.id) === String(postId)) {
+          p.likes = Array.isArray(p.likes) ? p.likes : [];
+          var i = p.likes.indexOf(myName);
+          if (i >= 0) p.likes.splice(i, 1); else p.likes.push(myName);
+          p.liked = p.likes.length > 0;
+        }
       });
     });
     saveMomData(d);
+  }
+
+  // 发布我的朋友圈后：随机抽取点赞人（聊天对象 80%，其他设定人每人 50%），延迟浮现
+  var MOM_LIKE_PEND_KEY = 'ph_mom_like_pending';
+  function loadMomLikePending() { try { var a = lsGet(MOM_LIKE_PEND_KEY, []); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function saveMomLikePending() { try { lsSet(MOM_LIKE_PEND_KEY, momLikePending); } catch (e) {} }
+  var momLikePending = loadMomLikePending();
+
+  function scheduleMomLikesForPost(post, ov) {
+    try {
+      var st = getMomSettings();
+      var likers = [];
+      if (Math.random() < 0.8) likers.push(getPartnerName());                 // 聊天对象 80%
+      (st.likers || []).forEach(function (n) {
+        if (Math.random() < 0.5) likers.push(String(n));                       // 其他设定者每人 50%
+      });
+      if (!likers.length) return;                                            // 可能无人点赞
+      var eta = Date.now() + 800 + Math.random() * 5000;                    // 3~6 秒左右浮现，模拟真实
+      momLikePending.push({ postId: String(post.id), likers: likers, eta: eta });
+      saveMomLikePending();
+    } catch (e) {}
+  }
+
+  // 到期的点赞写入对应动态
+  function tickMomLikes(now) {
+    try {
+      if (!momLikePending.length) return;
+      var remain = [];
+      var changed = false;
+      var d = getMomData();
+      momLikePending.forEach(function (p) {
+        if (now < p.eta) { remain.push(p); return; }
+        var found = null;
+        ['posts', 'myPosts'].forEach(function (k) {
+          (d[k] || []).forEach(function (post) { if (String(post.id) === String(p.postId)) found = post; });
+        });
+        if (found) {
+          found.likes = Array.isArray(found.likes) ? found.likes : [];
+          var dedup = {};
+          (found.likes || []).forEach(function (n) { dedup[n] = true; });
+          (p.likers || []).forEach(function (n) { if (!dedup[n]) { dedup[n] = true; found.likes.push(n); } });
+          found.liked = found.likes.length > 0;
+          changed = true;
+        }
+      });
+      momLikePending = remain;
+      if (changed) {
+        saveMomData(d);
+        saveMomLikePending();
+        try {
+          var momOv = root && root.querySelector('.mom-ov');
+          if (momOv && momOv.isConnected) renderMoments(momOv);
+        } catch (e) {}
+      }
+    } catch (e) {}
   }
 
   // 发布输入弹窗
@@ -2018,6 +2271,8 @@
       toast('已发布');
       // 发布后，对方会按设定速度回复
       scheduleMomReplyToMe(d.myPosts[d.myPosts.length - 1], ov);
+      // 发布后，随机抽取点赞（聊天对象80% / 其他设定者每人50%），延迟浮现
+      scheduleMomLikesForPost(d.myPosts[d.myPosts.length - 1], ov);
     });
     pm.addEventListener('click', function (e) { if (e.target === pm) pm.remove(); });
   }
@@ -2070,41 +2325,60 @@
 
   // 对方回复我发布的动态
   function scheduleMomReplyToMe(post, ov) {
-    var st = getMomSettings();
-    if (!st.replyMin || st.replyMin < 1) return; // 0=不回复
-    var waitMs = Math.random() * st.replyMin * 60 * 1000;
-    setTimeout(function () {
-      try {
-        var d = getMomData();
-        var target = (d.myPosts || []).find(function (x) { return String(x.id) === String(post.id); });
-        if (!target) return;
-        target.comments = target.comments || [];
-        target.comments.push({ id: 'c' + Date.now() + Math.random().toString(16).slice(2, 6), from: 'them', text: momCardText() || '看到啦！我也很喜欢 💕', ts: Date.now() });
-        saveMomData(d);
-        if (ov && ov.isConnected) renderMoments(ov);
-      } catch (e) {}
-    }, waitMs);
+    try {
+      var st = getMomSettings();
+      if (st.replyMin < 1) return; // 0=不回复
+      momPending.push({ postId: String(post.id), eta: Date.now() + Math.random() * st.replyMin * 60 * 1000, isMe: true });
+      saveMomPending();
+    } catch (e) {}
   }
 
-  // 我的评论，对方有几率回复
+  // 我的评论/回复，对方有几率回复（剩余 50% 概率放弃；持久化待回复队列，刷新不丢失）
   function scheduleMomReplyToComment(target, myComment, ov) {
     if (Math.random() > 0.5) return; // 有几率
-    var st = getMomSettings();
-    var waitMs = Math.random() * Math.max(1, st.replyMin || 5) * 60 * 1000;
-    setTimeout(function () {
-      try {
-        var d = getMomData();
+    try {
+      var st = getMomSettings();
+      if (st.replyMin < 1) return; // 0=不回复
+      momPending.push({ postId: String(target.id), eta: Date.now() + Math.random() * st.replyMin * 60 * 1000, isMe: false });
+      saveMomPending();
+    } catch (e) {}
+  }
+  // 待回复队列存储
+  var MOM_PENDING_KEY = 'ph_mom_pending';
+  function loadMomPending() { try { var a = lsGet(MOM_PENDING_KEY, []); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function saveMomPending() { try { lsSet(MOM_PENDING_KEY, momPending); } catch (e) {} }
+  // 全局 tick：扫描待回复，到期后写入对方回复并持久化
+  function tickMomReplies(now) {
+    try {
+      if (!momPending.length) return;
+      var remain = [];
+      var changed = false;
+      var d = getMomData();
+      momPending.forEach(function (p) {
+        if (now < p.eta) { remain.push(p); return; }
         var found = null;
         ['posts', 'myPosts'].forEach(function (k) {
-          (d[k] || []).forEach(function (post) { if (String(post.id) === String(target.id)) found = post; });
+          (d[k] || []).forEach(function (post) { if (String(post.id) === String(p.postId)) found = post; });
         });
-        if (!found) return;
-        found.comments = found.comments || [];
-        found.comments.push({ id: 'c' + Date.now() + Math.random().toString(16).slice(2, 6), from: 'them', text: momCardText() || '嗯嗯，我也这么觉得 😊', ts: Date.now(), replyTo: myComment.from === 'me' ? 'me' : null });
+        if (found) {
+          found.comments = found.comments || [];
+          var reply = p.isMe
+            ? (momCardText() || '看到啦！我也很喜欢 💕')
+            : (momCardText() || '嗯嗯，我也这么觉得 😊');
+          found.comments.push({ id: 'c' + Date.now() + Math.random().toString(16).slice(2, 6), from: 'them', text: reply, ts: now, replyTo: 'me' });
+          changed = true;
+        }
+      });
+      momPending = remain;
+      if (changed) {
         saveMomData(d);
-        if (ov && ov.isConnected) renderMoments(ov);
-      } catch (e) {}
-    }, waitMs);
+        saveMomPending();
+        try {
+          var momOv = root && root.querySelector('.mom-ov');
+          if (momOv && momOv.isConnected) renderMoments(momOv);
+        } catch (e) {}
+      }
+    } catch (e) {}
   }
 
   // 对方发布朋友圈（定时，基于下次发布时间戳，避免多次打开堆积定时器）
@@ -2164,6 +2438,12 @@
       '<input type="range" id="momSetPost" min="0" max="1440" step="1" value="' + st.postMin + '" style="width:100%;accent-color:#3f9d3f;" />' +
       '<div style="display:flex;justify-content:space-between;font-size:11px;color:#4a6fa5;"><span>0（不发布）</span><span id="momSetPostV">' + st.postMin + ' 分钟</span></div></div>' +
       '<div class="ph-field" style="font-size:11px;color:#8b94bf;">头像和名字跟随聊天设置；TA 的内容来自回复库「主字卡」，并受拼字卡开关影响。</div>' +
+      '<div class="ph-field"><label style="font-weight:700;">👍 点赞设置</label>' +
+      '<div style="font-size:11px;color:#8b94bf;margin-bottom:6px;">你发布朋友圈后，TA 有 80% 概率点赞；下方设置的人，每人 50% 概率点赞（可能无人点赞）。</div>' +
+      '<div id="momLikers"><div style="font-size:12px;color:#4a6fa5;margin-bottom:4px;">TA 必在其中</div></div>' +
+      '<div style="display:flex;gap:6px;margin-top:6px;">' +
+      '<input id="momLikerAdd" placeholder="添加会点赞的人名" style="flex:1;border:1px solid rgba(59,130,246,.3);border-radius:8px;padding:8px 10px;font-size:13px;color:#16325c;font-family:inherit;" />' +
+      '<button class="ph-btn primary" data-act="add-liker" type="button" style="padding:6px 12px;">＋</button></div></div>' +
       '<div class="ph-btns">' +
       '<button class="ph-btn" data-act="cancel" style="background:#eef3fb;color:#5a7ba8;">取消</button>' +
       '<button class="ph-btn primary" data-act="ok">保存</button>' +
@@ -2171,6 +2451,33 @@
     root.appendChild(s);
 
     var bgVal = st.bg;
+    var likers = st.likers.slice();
+
+    function renderLikers() {
+      var box = s.querySelector('#momLikers');
+      box.innerHTML = '<div style="font-size:12px;color:#4a6fa5;margin-bottom:4px;">TA 必在其中</div>' +
+        (likers.length ? likers.map(function (n, i) {
+          return '<div class="ph-li" style="margin:2px 0;padding:4px 6px;"><span class="name">👤 ' + esc(n) + '</span><span class="act"><button class="ph-mini danger" data-del-liker="' + i + '" type="button">删除</button></span></div>';
+        }).join('') : '<div style="font-size:12px;color:#8b94bf;">暂无其他设定的人</div>');
+    }
+    renderLikers();
+    s.querySelector('#momLikers').addEventListener('click', function (e) {
+      var del = e.target.closest('[data-del-liker]');
+      if (!del) return;
+      likers.splice(parseInt(del.dataset.delLiker, 10), 1);
+      renderLikers();
+    });
+    s.querySelector('[data-act="add-liker"]').addEventListener('click', function () {
+      var v = s.querySelector('#momLikerAdd').value.trim();
+      if (!v) { toast('请输入人名'); return; }
+      if (likers.indexOf(v) !== -1) { toast('这个人已在列表中'); return; }
+      likers.push(v);
+      s.querySelector('#momLikerAdd').value = '';
+      renderLikers();
+    });
+    s.querySelector('#momLikerAdd').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); s.querySelector('[data-act="add-liker"]').click(); }
+    });
     s.querySelector('#momSetBg').addEventListener('change', function () {
       var f = this.files && this.files[0]; if (!f) return;
       var r = new FileReader();
@@ -2190,7 +2497,8 @@
         bg: bgVal,
         signature: sig || '记录美好生活',
         replyMin: parseInt(s.querySelector('#momSetReply').value, 10) || 0,
-        postMin: parseInt(s.querySelector('#momSetPost').value, 10) || 0
+        postMin: parseInt(s.querySelector('#momSetPost').value, 10) || 0,
+        likers: likers
       };
       saveMomSettings(ns);
       s.remove();
@@ -2406,7 +2714,7 @@
 
   /* ---------- 公共接口 ---------- */
   window.phoneHome = {
-    show: function () { loadData(); buildDOM(); if (!root) return; root.classList.remove('hidden'); renderClock(); renderCountdown(); renderCalendar(); bindEvents(); applyBeautyIcons(); setInterval(renderClock, 1000); maybeGiftFromPartner(); maybeCartGiftFromPartner(); maybePartnerFoodGift(); scheduleMomPostFromPartner(null); },
+    show: function () { loadData(); buildDOM(); if (!root) return; root.classList.remove('hidden'); slotTick = setInterval(function(){ var n = Date.now(); tickPartnerReplies(n); tickMomReplies(n); tickMomLikes(n); maybePartnerFoodGift(); }, 2000); renderClock(); renderCountdown(); renderCalendar(); bindEvents(); applyBeautyIcons(); setInterval(renderClock, 1000); maybeGiftFromPartner(); maybeCartGiftFromPartner(); maybePartnerFoodGift(); scheduleMomPostFromPartner(null); },
     hide: function () { if (root) root.classList.add('hidden'); },
     enterChat: enterChat,
     openManager: openAnnManager,
@@ -2431,6 +2739,12 @@
     renderCalendar();
     applyBeautyIcons();
     setInterval(renderClock, 1000);
+    momPending = loadMomPending();
+    momLikePending = loadMomLikePending();
+    slotTick = setInterval(function(){ var n = Date.now(); tickPartnerReplies(n); tickMomReplies(n); tickMomLikes(n); maybePartnerFoodGift(); }, 2000);
+    tickPartnerReplies(Date.now());
+    tickMomReplies(Date.now());
+    tickMomLikes(Date.now());
     maybePartnerFoodGift();
     scheduleMomPostFromPartner(null);
   }
