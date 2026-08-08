@@ -574,7 +574,16 @@ function showPokeTab() {
                 }
             });
             DOMElements.messageInput.addEventListener('input', () => {
-                DOMElements.messageInput.style.height = 'auto'; DOMElements.messageInput.style.height = `${Math.min(DOMElements.messageInput.scrollHeight, 120)}px`;
+                resizeMessageInputForTyping(DOMElements.messageInput);
+            });
+            DOMElements.messageInput.addEventListener('focus', () => {
+                resizeMessageInputForTyping(DOMElements.messageInput);
+            });
+            DOMElements.messageInput.addEventListener('blur', () => {
+                window.collapseMessageInputBar();
+            });
+            DOMElements.messageInput.addEventListener('keydown', () => {
+                resizeMessageInputForTyping(DOMElements.messageInput);
             });
 
 

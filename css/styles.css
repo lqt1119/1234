@@ -10922,6 +10922,15 @@ body.bottom-collapse-mode #collapse-expand-btn {
     line-height: 1.4 !important;
 }
 
+/* 输入框横向展开：打字/聚焦时收起次要功能钮，输入框占满更宽；清空或失焦恢复 */
+body.inputbar-expanded #continue-btn,
+body.inputbar-expanded #batch-btn {
+    display: none !important;
+}
+body.inputbar-expanded .message-input {
+    padding-right: 14px;
+}
+
 /* ────────────────────────────────────────────────────────────────
    首页改造 · 第三步：双击聊天里"对方头像" = 拍一拍
    ──────────────────────────────────────────────────────────────── */

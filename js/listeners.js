@@ -1,3 +1,20 @@
+// 聊天输入框横向展开：聚焦/打字时收起次要功能钮（继续聊天），输入框占满更宽；清空或失焦恢复
+// 批量模式（isBatchMode）下保留批量发送按钮，避免无法退出
+window.resizeMessageInputForTyping = function(el) {
+    if (!el) return;
+    var expanded = !!(el.value && String(el.value).trim());
+    if (typeof isBatchMode !== 'undefined' && isBatchMode) expanded = false;
+    var body = document.body;
+    if (body) body.classList.toggle('inputbar-expanded', expanded);
+};
+window.collapseMessageInputBar = function() {
+    var el = DOMElements && DOMElements.messageInput;
+    if (!el) return;
+    el.style.height = '46px';
+    var body = document.body;
+    if (body) body.classList.remove('inputbar-expanded');
+};
+
 function setupEventListeners() {
     try {
         initCoreListeners();
@@ -3132,7 +3149,16 @@ playlist.style.top = (rect.top + (player.classList.contains('collapsed') ? 65 : 
                 }
             });
             DOMElements.messageInput.addEventListener('input', () => {
-                DOMElements.messageInput.style.height = 'auto'; DOMElements.messageInput.style.height = `${Math.min(DOMElements.messageInput.scrollHeight, 120)}px`;
+                resizeMessageInputForTyping(DOMElements.messageInput);
+            });
+            DOMElements.messageInput.addEventListener('focus', () => {
+                resizeMessageInputForTyping(DOMElements.messageInput);
+            });
+            DOMElements.messageInput.addEventListener('blur', () => {
+                window.collapseMessageInputBar();
+            });
+            DOMElements.messageInput.addEventListener('keydown', () => {
+                resizeMessageInputForTyping(DOMElements.messageInput);
             });
 
 

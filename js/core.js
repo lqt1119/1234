@@ -1694,6 +1694,10 @@ if (!isBatchMode && type === 'normal') {
             DOMElements.batchBtn.classList.toggle('active', isBatchMode);
             DOMElements.batchBtn.title = isBatchMode ? "退出批量模式": "批量发送模式";
             DOMElements.batchPreview.style.display = isBatchMode ? 'flex': 'none';
+            // 批量模式下取消"输入框横向展开"，保证批量按钮可操作
+            if (isBatchMode) {
+                document.body.classList.remove('inputbar-expanded');
+            }
             const placeholder = "";
             DOMElements.messageInput.placeholder = isBatchMode ? "此刻，想说的有很多很多...": (placeholder.length > 20 ? placeholder.substring(0, 20) + "...": placeholder);
             if (isBatchMode) {
