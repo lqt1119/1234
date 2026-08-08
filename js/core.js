@@ -1485,11 +1485,20 @@ const addMessage = (message) => {
 
         window._partnerGiftReply = function(replies) {
             // 对方收到礼物后，有几率回复感谢语；若启用，触发打字→回复
+            // 内容遵循主字卡：拼字卡开启→优先用 composeGiftNote() 拼卡；否则从主字卡池随机取
             try {
-                const arr = Array.isArray(replies) && replies.length ? replies : null;
-                if (!arr) { window.simulateReply(); return; }
-                if (Math.random() < 0.45) {
-                    const text = arr[Math.floor(Math.random() * arr.length)];
+                let text = null;
+                const puzOn = (typeof window.puzzleCardEnabled === 'function') && window.puzzleCardEnabled();
+                if (puzOn && typeof window.composeGiftNote === 'function') {
+                    const composed = window.composeGiftNote();
+                    if (composed) text = composed;
+                }
+                if (!text) {
+                    const arr = Array.isArray(replies) && replies.length ? replies : null;
+                    if (arr) text = arr[Math.floor(Math.random() * arr.length)];
+                }
+                if (!text) { window.simulateReply && window.simulateReply(); return true; }
+                if (Math.random() < 0.6) {
                     addMessage({
                         id: Date.now() + Math.random(),
                         sender: settings.partnerName || '对方',
@@ -1498,6 +1507,7 @@ const addMessage = (message) => {
                         status: 'received',
                         type: 'normal',
                     });
+                    throttledSaveData();
                 }
             } catch (e) {}
             return true;

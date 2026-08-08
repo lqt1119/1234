@@ -551,6 +551,10 @@
     '#phone-home .mom-name{font-size:14px;font-weight:700;color:#576b95;cursor:pointer;}' +
     '#phone-home .mom-text{font-size:14px;color:#1a1a1a;line-height:1.55;margin:4px 0;white-space:pre-wrap;word-break:break-word;}' +
     '#phone-home .mom-img{max-width:230px;border-radius:8px;margin-top:4px;display:block;}' +
+    '#phone-home .mom-sticker{max-width:120px;border-radius:8px;margin-top:6px;display:block;}' +
+    '#phone-home .mom-stk-pick{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;max-height:96px;overflow-y:auto;}' +
+    '#phone-home .mom-stk-pick img{width:44px;height:44px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid transparent;background:#fff;}' +
+    '#phone-home .mom-stk-pick img.on{border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.25);}' +
     '#phone-home .mom-time{font-size:11px;color:#b2b2b2;margin-top:6px;display:flex;align-items:center;gap:10px;}' +
     '#phone-home .mom-actions{font-size:12px;color:#576b95;cursor:pointer;}' +
     '#phone-home .mom-cmts{margin-top:8px;background:#f4f4f4;border-radius:6px;padding:6px 8px;font-size:12px;line-height:1.7;}' +
@@ -1342,15 +1346,17 @@
         : name + ' 在商城挑了一件礼物送给你：' + item.name + '（¥' + item.price + '）💝' + (noteTxt ? ' · ' + noteTxt : '');
       if (typeof window._pushGiftMessage === 'function') {
         window._pushGiftMessage({ give: kind === 'give', item: item, text: text });
-        // 我送给他/她 → 对方有几率回复感谢语（内容来自"主字卡"池）
+        // 我送给他/她 → 对方有几率回复感谢语（内容始终从主字卡随机，拼字卡开启时按拼字卡组合）
         if (kind === 'give' && typeof window._partnerGiftReply === 'function') {
           try {
             setTimeout(function () {
               var pool = (typeof window.getReplyCardPool === 'function') ? window.getReplyCardPool() : [];
-              window._partnerGiftReply(pool && pool.length ? pool : GIFT_REPLIES);
+              window._partnerGiftReply(pool && pool.length ? pool : null);
             }, 600 + Math.random() * 900);
           } catch (e) {}
         }
+      } else if (typeof window._pushPartnerTextMessage === 'function') {
+        window._pushPartnerTextMessage(text); // 聊天未初始化时至少推文本，保证"也出现在聊天"
       } else if (typeof window.showNotification === 'function') {
         window.showNotification(text, 'info', 4000);
       }
@@ -1682,10 +1688,12 @@
           try {
             setTimeout(function () {
               var pool = (typeof window.getReplyCardPool === 'function') ? window.getReplyCardPool() : [];
-              window._partnerGiftReply(pool && pool.length ? pool : FOOD_REPLIES);
+              window._partnerGiftReply(pool && pool.length ? pool : null);
             }, 700 + Math.random() * 1100);
           } catch (e) {}
         }
+      } else if (typeof window._pushPartnerTextMessage === 'function') {
+        window._pushPartnerTextMessage(text); // 聊天未初始化时至少推文本，保证"也出现在聊天"
       } else if (typeof window.showNotification === 'function') {
         window.showNotification(text, 'info', 4000);
       }
@@ -1776,6 +1784,10 @@
   window._onUserHungry = function (t) { maybeHungryFoodGift(t); };
   window.phoneHomeDebug = {
     isMealWindow: function (ts) { return mealWindowEnd(ts || Date.now()) !== null; },
+    noteForPartner: function () { return giftNoteForPartner(); },
+    replyForPartner: function () { return replyFromPool(); },
+    momContent: function () { return momRandomMoment(); },
+    momMyStk: function () { return momMyStickers(); },
     windowMatrix: function () {
       var out = [];
       [7.5, 8, 9, 12, 13, 18, 19, 3, 20.5, 21].forEach(function (hh) {
@@ -2048,7 +2060,50 @@
   function momRandomMoment() {
     var t = momCardText();
     var emo = MOM_EMOJIS[Math.floor(Math.random() * MOM_EMOJIS.length)];
-    return t || ('今天也过得很充实' + emo);
+    var text = t || ('今天也过得很充实' + emo);
+    return { text: text, stickers: momThemStickers() };
+  }
+
+  // 从指定表情库抽 1~3 张贴纸（有几率返回空数组）
+  function momPickStickers(pool) {
+    try {
+      var srcs = momStk(pool);
+      if (!srcs.length) return [];
+      if (Math.random() < 0.5) return []; // 五成几率不带
+      var n = 1 + Math.floor(Math.random() * Math.min(3, srcs.length));
+      var out = [], used = {}, size = srcs.length, k = 0;
+      while (k < n && Object.keys(used).length < size) {
+        var i = Math.floor(Math.random() * size);
+        if (used[i]) continue;
+        used[i] = true; out.push(srcs[i]); k++;
+      }
+      return out;
+    } catch (e) { return []; }
+  }
+  // 他发的动态使用的表情包 = 对方表情库（stickerLibrary）
+  function momThemStickers() {
+    try {
+      var pool = (typeof stickerLibrary !== 'undefined') ? stickerLibrary : [];
+      return momPickStickers(pool);
+    } catch (e) { return []; }
+  }
+  // 我发动态可选的表情包 = 我的表情库（myStickerLibrary），为空则回退对方表情库
+  function momMyStickers() {
+    try {
+      var pool = (typeof myStickerLibrary !== 'undefined' && Array.isArray(myStickerLibrary) && myStickerLibrary.length)
+        ? myStickerLibrary : ((typeof stickerLibrary !== 'undefined') ? stickerLibrary : []);
+      return momStk(pool);
+    } catch (e) { return []; }
+  }
+  function momStk(pool) {
+    try {
+      if (!Array.isArray(pool)) return [];
+      var uniq = {}, out = [];
+      pool.forEach(function (s) {
+        if (s && typeof s === 'string' && !uniq[s]) { uniq[s] = true; out.push(s); }
+      });
+      return out;
+    } catch (e) { return []; }
   }
 
   // 排序：最新在前
@@ -2113,6 +2168,12 @@
       var avSrc = mine ? getMyAvatarMom() : getPartnerAvatarMom();
       var sig = getMomSettings().signature;
       var sigHtml = (mine && sig) ? '<div style="font-size:12px;color:#999;margin-top:2px;">' + esc(sig) + '</div>' : '';
+      var stickers = Array.isArray(p.stickers) ? p.stickers : (Array.isArray(p.store) ? p.store : []);
+      var stkHtml = stickers.length
+        ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">' + stickers.map(function (s) {
+            return '<img class="mom-sticker" src="' + esc(s) + '" style="width:64px;height:64px;object-fit:cover;display:block;" />';
+          }).join('') + '</div>'
+        : '';
       var likes = Array.isArray(p.likes) ? p.likes : [];
       if (!likes.length && p.liked) likes = [getMyNameMom()]; // 兼容旧数据
       var likeHtml = '';
@@ -2140,7 +2201,7 @@
         '<div class="mom-content">' +
         '<div class="mom-name">' + esc(name) + '</div>' +
         (mine ? sigHtml : '') +
-        '<div class="mom-text">' + esc(p.text || '') + '</div>' +
+        '<div class="mom-text">' + (p.text ? esc(p.text) : '') + '</div>' + stkHtml +
         (p.img ? '<img class="mom-img" src="' + esc(p.img) + '" />' : '') +
         '<div class="mom-time">' + fmtDate(p.ts) +
         '<span class="mom-actions" data-act="comment" data-post="' + p.id + '">💬 评论</span>' +
@@ -2240,10 +2301,17 @@
     var pm = document.createElement('div');
     pm.className = 'ph-ov';
     pm.style.zIndex = 30;
+    var myStks = momMyStickers();
+    var stkHtml = myStks.length
+      ? '<div class="mom-stk-pick" id="momStkPick">' + myStks.map(function (s, i) {
+          return '<img src="' + esc(s) + '" data-i="' + i + '" title="点选表情包" />';
+        }).join('') + '</div>'
+      : '<div style="font-size:11px;color:#8b94bf;">表情库为空，可在「高级功能 → 自定义回复 → 表情库」上传后使用。</div>';
     pm.innerHTML =
       '<div class="ph-modal">' +
       '<h3>📝 发布朋友圈</h3>' +
-      '<div class="ph-field"><textarea id="momPubText" style="background:#f4f8ff;border:1px solid rgba(59,130,246,.32);border-radius:8px;padding:8px 10px;font-size:13px;color:#16325c;font-family:inherit;outline:none;height:80px;resize:none;"></textarea></div>' +
+      '<div class="ph-field"><textarea id="momPubText" style="background:#f4f8ff;border:1px solid rgba(59,130,246,.32);border-radius:8px;padding:8px 10px;font-size:13px;color:#16325c;font-family:inherit;outline:none;height:70px;resize:none;"></textarea></div>' +
+      '<div class="ph-field"><label>表情包（选填，最多 3 个）</label>' + stkHtml + '</div>' +
       '<div class="ph-field"><label>配图（选填）</label>' +
       '<input type="file" id="momPubImg" accept="image/*" /></div>' +
       '<div class="ph-btns">' +
@@ -2258,13 +2326,35 @@
       r.onload = function (e) { imgVal = e.target.result; };
       r.readAsDataURL(f);
     });
+    // 表情包点选（多选，最多 3 个）
+    var pickedStk = [];
+    var stkPick = pm.querySelector('#momStkPick');
+    if (stkPick) {
+      stkPick.querySelectorAll('img').forEach(function (im) {
+        im.addEventListener('click', function () {
+          var idx = parseInt(im.dataset.i, 10);
+          var src = myStks[idx];
+          if (!src) return;
+          var at = pickedStk.indexOf(src);
+          if (at >= 0) {
+            pickedStk.splice(at, 1);
+            im.classList.remove('on');
+          } else if (pickedStk.length < 3) {
+            pickedStk.push(src);
+            im.classList.add('on');
+          } else {
+            toast('最多带 3 个表情包');
+          }
+        });
+      });
+    }
     pm.querySelector('[data-act="cancel"]').addEventListener('click', function () { pm.remove(); });
     pm.querySelector('[data-act="ok"]').addEventListener('click', function () {
       var text = pm.querySelector('#momPubText').value.trim();
-      if (!text) { toast('写点什么再发布吧'); return; }
+      if (!text && !pickedStk.length) { toast('写点什么再发布吧'); return; }
       var d = getMomData();
       d.myPosts = d.myPosts || [];
-      d.myPosts.push({ id: 'm' + Date.now() + Math.random().toString(16).slice(2, 6), text: text, img: imgVal || null, ts: Date.now(), comments: [], from: 'me' });
+      d.myPosts.push({ id: 'm' + Date.now() + Math.random().toString(16).slice(2, 6), text: text, stickers: pickedStk.slice(), img: imgVal || null, ts: Date.now(), comments: [], from: 'me' });
       saveMomData(d);
       pm.remove();
       renderMoments(ov);
@@ -2402,7 +2492,8 @@
       var st = getMomSettings();
       var d = getMomData();
       d.posts = d.posts || [];
-      d.posts.push({ id: 'p' + Date.now() + Math.random().toString(16).slice(2, 6), text: momRandomMoment(), ts: Date.now(), comments: [], from: 'them' });
+      var content = momRandomMoment();
+      d.posts.push({ id: 'p' + Date.now() + Math.random().toString(16).slice(2, 6), text: content.text, stickers: content.stickers, ts: Date.now(), comments: [], from: 'them' });
       saveMomData(d);
       if (ov && ov.isConnected) renderMoments(ov);
       // 排下一次发布
