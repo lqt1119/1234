@@ -1788,6 +1788,7 @@
     replyForPartner: function () { return replyFromPool(); },
     momContent: function () { return momRandomMoment(); },
     momMyStk: function () { return momMyStickers(); },
+    momCmtStk: function () { return momCommentSticker(); },
     windowMatrix: function () {
       var out = [];
       [7.5, 8, 9, 12, 13, 18, 19, 3, 20.5, 21].forEach(function (hh) {
@@ -2087,6 +2088,15 @@
       return momPickStickers(pool);
     } catch (e) { return []; }
   }
+  // 他发评论时用的表情包：有几率带一张贴纸，也可能不带
+  function momCommentSticker() {
+    try {
+      var pool = momStk((typeof stickerLibrary !== 'undefined') ? stickerLibrary : []);
+      if (!pool.length) return null;
+      if (Math.random() < 0.45) return pool[Math.floor(Math.random() * pool.length)];
+      return null;
+    } catch (e) { return null; }
+  }
   // 我发动态可选的表情包 = 我的表情库（myStickerLibrary），为空则回退对方表情库
   function momMyStickers() {
     try {
@@ -2182,7 +2192,7 @@
         likeHtml = '<div class="mom-likes"><span class="like-icon">❤️</span> ' + likeStr + '</div>';
       }
       var cmtHtml = '';
-      var cmts = (p.comments || []).filter(function (c) { return c && c.text; });
+      var cmts = (p.comments || []).filter(function (c) { return c && (c.text || c.sticker); });
       if (cmts.length) {
         cmtHtml = '<div class="mom-cmts">' + cmts.map(function (c) {
           var cn = c.from === 'me' ? getMyNameMom() : getPartnerName();
@@ -2190,10 +2200,13 @@
           var toName = null;
           if (c.replyTo === 'me') toName = getMyNameMom();
           else if (c.replyTo === 'them') toName = getPartnerName();
+          var bodyHtml = c.sticker
+            ? '<img class="mom-cmt-stk" src="' + esc(c.sticker) + '" style="width:56px;height:56px;object-fit:cover;display:inline-block;vertical-align:middle;margin-left:4px;border-radius:6px;" />'
+            : '<span class="reply">：' + esc(c.text || '') + '</span>';
           return '<div class="mom-cmt">' +
             '<b data-act="reply-cmt" data-post="' + p.id + '" data-cid="' + c.id + '">' + esc(cn) + '</b>' +
             (toName ? '<span class="to"> 回复 ' + esc(toName) + '</span>' : '') +
-            '<span class="reply">：' + esc(c.text) + '</span></div>';
+            bodyHtml + '</div>';
         }).join('') + '</div>';
       }
       return '<div class="mom-item" data-post="' + p.id + '">' +
@@ -2452,10 +2465,15 @@
         });
         if (found) {
           found.comments = found.comments || [];
+          // 对方评论：有几率直接发一张表情包（不一定是文字），也可能不带
           var reply = p.isMe
             ? (momCardText() || '看到啦！我也很喜欢 💕')
             : (momCardText() || '嗯嗯，我也这么觉得 😊');
-          found.comments.push({ id: 'c' + Date.now() + Math.random().toString(16).slice(2, 6), from: 'them', text: reply, ts: now, replyTo: 'me' });
+          var cmtSticker = momCommentSticker(); // 可能为 null，也可能是一张贴纸
+          var cmtObj = { id: 'c' + Date.now() + Math.random().toString(16).slice(2, 6), from: 'them', ts: now, replyTo: 'me' };
+          if (cmtSticker) { cmtObj.sticker = cmtSticker; cmtObj.text = ''; }
+          else { cmtObj.text = reply; }
+          found.comments.push(cmtObj);
           changed = true;
         }
       });
